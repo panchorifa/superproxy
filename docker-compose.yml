@@ -1,0 +1,55 @@
+version: '3'
+
+networks:
+  app-net:
+    driver: bridge
+
+volumes:
+  app-data:
+    external: true
+
+services:
+  couchdb:
+    image: couchdb:2.2.0
+    env_file: docker/.couch-env
+    container_name: couchdb
+    restart: always
+    ports:
+      - 5980:5984
+    volumes:
+      - ./docker/couchdb/etc/local.ini:/opt/couchdb/etc/local.ini
+      - app-data:/opt/couchdb/data
+    networks:
+      - app-net
+
+  haproxy:
+    build: ./docker/haproxy
+    container_name: haproxy
+    ports:
+      - 80:80
+    # volumes:
+    #   - ./logs:/var/log
+    depends_on:
+      - couchdb
+    networks:
+      - app-net
+
+  app:
+    container_name: app
+    build:
+      context: .
+    environment:
+      COUCH_NODE_NAME: couchdb@couchdb
+      COUCH_URL: http://admin:pass@haproxy/app
+    ports:
+      - 5988:5988
+    volumes:
+      - ./api/src:/app/api/src
+      - ./api/tests:/app/api/tests
+      - ./sentinel/src:/app/sentinel/src
+      - ./sentinel/test:/app/sentinel/tests
+      - ./docker:/app/docker
+    depends_on:
+      - haproxy
+    networks:
+      - app-net
